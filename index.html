@@ -352,7 +352,11 @@ storage.setItem(selectedPersonKey('pemohon'),requesterPerson.id);let att=old?.at
 try{
  const id=old?await window.twaCloud.updateRequest(obj):await window.twaCloud.createRequest(obj);
  editing=null;detail=id;page='detail';render();
-}catch(err){alert('Gagal menyimpan pengajuan ke Firebase: '+err.message)}
+}catch(err){
+ const hint=err?.code==='permission-denied'||/missing or insufficient permissions/i.test(String(err?.message||''))
+  ? '\n\nPeriksa apakah akun Pemohon memiliki role pemohon, department yang sesuai, dan Firestore Rules Fund Request sudah Publish.' : '';
+ alert('Gagal menyimpan pengajuan ke Firebase: '+err.message+hint);
+}
 }
 
 function editRequest(id){if(role!=='pemohon')return;const x=load().find(z=>z.id===id);if(!x||x.status!=='revision'||!ownsRequest(x)||!canAccessRequest(x)){alert('Hanya pengajuan milik Anda dari divisi yang sesuai dan berstatus Perlu Revisi yang dapat diubah.');return}editing=id;page='new';render()}
@@ -610,7 +614,11 @@ const bridge={
    const snap=await t.get(counter);const next=(snap.exists()?Number(snap.data().last)||0:0)+1;
    const num=`${String(next).padStart(2,'0')}/${number.prefix||'IOM-FR'}/${code}/${romans[month-1]}/${year}`;
    const request={...input,id:num,ownerUid:u.uid,departmentKey:currentDeptKey(),status:'kepala'};
-   const target=reqRef(num);if((await t.get(target)).exists())throw Error('Nomor pengajuan sudah digunakan. Hubungi Admin untuk memperbarui counter.');
+   // Jangan membaca dokumen pengajuan baru sebelum create: aturan divisi
+   // memang melarang pembacaan dokumen yang belum ada (permission-denied).
+   // Jika nomor sudah terpakai, operasi set akan diperlakukan sebagai UPDATE,
+   // yang ditolak oleh Firestore Rules untuk pengajuan biasa.
+   const target=reqRef(num);
    t.set(counter,{last:next,departmentKey:currentDeptKey(),year,code});
    t.set(target,request);
    const event=doc(collection(reqRef(num),'audit'));
