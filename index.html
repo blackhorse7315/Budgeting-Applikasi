@@ -24,6 +24,41 @@
 @media(max-width:750px){.signature-grid,.admin-grid{grid-template-columns:1fr 1fr}}@media(max-width:480px){.signature-grid,.admin-grid{grid-template-columns:1fr}}
 @media print{.signature-grid{grid-template-columns:repeat(4,1fr)}.signature-box{break-inside:avoid}}
 .date-picker-row{position:relative;display:flex;align-items:center;gap:8px}.date-picker-row #neededDisplay{flex:1;min-width:0;background:#f8fafc;cursor:default}.date-picker-btn{flex:0 0 46px;padding:9px 7px;font-size:19px}.date-picker-native{position:absolute;right:0;bottom:0;width:1px;height:1px;padding:0;border:0;opacity:0;pointer-events:none}
+
+/* v3 — Responsive mobile layout: prevent the horizontal navigation from
+   stretching vertically when the list view has little/no content. */
+html{max-width:100%;overflow-x:clip}
+body{max-width:100%;overflow-x:clip}
+@media (max-width:1000px){
+  .layout{display:block;min-height:0;width:100%}
+  .layout>aside{display:flex;flex-direction:row;align-items:center;align-content:center;
+    justify-content:flex-start;flex-wrap:nowrap;align-self:start;height:auto;min-height:0;
+    max-width:100%;overflow-x:auto;overflow-y:hidden;padding:8px 10px;
+    border-right:0;border-bottom:1px solid var(--line);
+    -webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
+  .layout>aside>.navbtn{display:inline-flex;flex:0 0 auto;align-items:center;justify-content:center;
+    width:auto;min-height:42px;height:auto;max-height:52px;margin:0 3px;
+    padding:10px 12px;line-height:1.35;white-space:nowrap}
+  .layout>main{display:block;width:100%;max-width:100%;min-width:0}
+}
+@media (max-width:650px){
+  header{padding:14px 15px;gap:10px}
+  header .brand{font-size:clamp(16px,4.3vw,20px);line-height:1.35;overflow-wrap:anywhere}
+  .userctrl{gap:8px}
+  .layout>aside{padding:7px 9px}
+  .layout>aside>.navbtn{font-size:13px;min-height:40px;max-height:46px;padding:9px 11px}
+  main{padding:16px 12px}
+  h1{font-size:23px;line-height:1.3}
+  .panel{padding:15px}
+  .topbar{align-items:flex-start;gap:12px;margin-bottom:16px}
+  .topbar>.btn{max-width:100%}
+  .toolbar{align-items:stretch;gap:10px}
+  .toolbar input,.toolbar select{max-width:none;width:100%;min-width:0}
+  .toolbar .btn{min-height:42px;align-self:flex-start}
+  .scroll{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  input,select,textarea{font-size:16px}
+  .stat .num{overflow-wrap:anywhere;font-size:clamp(17px,5vw,23px)}
+}
 </style></head>
 <body>
 <header hidden><div><div class="brand">✦ TRANSWISATA <span style="font-weight:400">/ FUND REQUEST</span></div><div class="sub">Sistem Pengajuan Dana & Persetujuan Berjenjang</div></div><div class="userctrl"><span id="signedInAs" class="sub"></span><button class="btn outline" onclick="logout()">↪ Logout</button></div></header>
