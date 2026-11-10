@@ -378,6 +378,15 @@ function addItem(item={name:'',qty:1,price:0,needed:'',currency:'IDR'}){
  const selectedCurrency=itemCurrency(item,{currency:item.currency||'IDR'});
  el.innerHTML=`<input class="itname" placeholder="Nama barang / biaya" required maxlength="180" value="${escapeHtml(item.name)}"><input class="itqty" type="number" min="0.01" step="0.01" required value="${Number(item.qty)||1}"><input class="itprice" type="number" min="0" step="${selectedCurrency==='IDR'||selectedCurrency==='JPY'?'1':'0.01'}" required value="${Number(item.price)||0}"><select class="itcurrency currency-choice" required aria-label="Mata uang rincian">${Object.entries(CURRENCIES).map(([code,label])=>`<option value="${code}" ${selectedCurrency===code?'selected':''}>${code}</option>`).join('')}</select><input class="itsum" readonly aria-label="Jumlah item"><div class="itemdate"><label class="itemdate-label">Tanggal Dibutuhkan *</label><input class="itneeded-display" type="text" readonly value="${selectedDate?escapeHtml(dateFull(selectedDate)):String()}" placeholder="Pilih tanggal" onclick="openItemDate(this)" aria-label="Tanggal dibutuhkan, pilih melalui kalender"><input class="itneeded" type="date" required value="${escapeHtml(selectedDate)}" onchange="syncItemDate(this)" aria-label="Pilih tanggal dibutuhkan"></div><button type="button" class="remove" aria-label="Hapus item" title="Hapus item">×</button>`;
  el.querySelector('.remove').onclick=()=>{el.remove();calc()};
+ // Ketika Harga Satuan masih 0, kosongkan saat disentuh agar nominal langsung dapat diketik.
+ const unitPrice=el.querySelector('.itprice');
+ unitPrice.addEventListener('focus',()=>{
+  if(Number(unitPrice.value)===0){unitPrice.value='';calc();}
+ });
+ // Jika dibiarkan kosong, kembalikan ke nilai awal agar tidak ada kolom kosong.
+ unitPrice.addEventListener('blur',()=>{
+  if(unitPrice.value.trim()===''){unitPrice.value='0';calc();}
+ });
  el.querySelectorAll('.itqty,.itprice').forEach(x=>x.addEventListener('input',calc));
  el.querySelector('.itcurrency').addEventListener('change',()=>{
   const c=el.querySelector('.itcurrency').value;
