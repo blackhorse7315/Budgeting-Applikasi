@@ -216,10 +216,10 @@ const chosenPerson=r=>{
 };
 const personSelect=(r,selected='',id='personSelect',required=true)=>`<select id="${id}" ${required?'required':''}><option value="">— Pilih ${escapeHtml(roleName[r])} —</option>${(r==='pemohon'&&role==='pemohon'?allowedApplicants():roster()[r]).map(p=>`<option value="${escapeHtml(p.id)}" ${p.id===selected?'selected':''}>${escapeHtml(p.name)} — ${escapeHtml(p.position)}</option>`).join('')}</select>`;
 const snapshot=p=>p?{id:p.id,name:p.name,position:p.position,department:p.department||'',signature:p.signature||''}:null;
-const DEPARTMENTS=['Operation','Maintenance','Finance','HRD & GA','Commercial','Management','Lainnya'];
+const DEPARTMENTS=['Operation','Maintenance','Safety & Security','Finance','HRD & GA','Commercial','Management','Lainnya'];
 // Format: 01/IOM-FR/Ops/XI/2026. Existing document IDs remain unchanged.
 const NUMBERING_KEY='twa_fund_numbering_v1';
-const DEFAULT_NUMBERING={prefix:'IOM-FR',codes:{Operation:'Ops',Maintenance:'Maint',QSS:'QSS'}};
+const DEFAULT_NUMBERING={prefix:'IOM-FR',codes:{Operation:'Ops',Maintenance:'Maint','Safety & Security':'SS',QSS:'QSS'}};
 function numberingSettings(){const v=cloudNumbering;return {prefix:v?.prefix||DEFAULT_NUMBERING.prefix,codes:{...DEFAULT_NUMBERING.codes,...(v?.codes||{})}}}
 function divisionCode(division){const name=String(division||'').trim(),settings=numberingSettings();return Object.entries(settings.codes).find(([d])=>normDivision(d)===normDivision(name))?.[1]||''}
 const ROMAN_MONTHS=['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII'];
@@ -572,7 +572,8 @@ const bridge={
  async createRequest(input){
   const u=requireUser();if(profile.role!=='pemohon'||String(input.department).toLowerCase()!==currentDeptKey())throw Error('Divisi pengajuan tidak sesuai.');
   const numberSnap=await getDoc(doc(db,'fundMaster','numbering'));
-  const number=numberSnap.exists()?numberSnap.data():{prefix:'IOM-FR',codes:{Operation:'Ops',Maintenance:'Maint',QSS:'QSS'}};
+  const number=numberSnap.exists()?numberSnap.data():{prefix:'IOM-FR',codes:{Operation:'Ops',Maintenance:'Maint','Safety & Security':'SS',QSS:'QSS'}};
+  number.codes={Operation:'Ops',Maintenance:'Maint','Safety & Security':'SS',QSS:'QSS',...(number.codes||{})};
   const code=Object.entries(number.codes||{}).find(([k])=>k.toLowerCase()===currentDeptKey())?.[1];if(!code)throw Error('Kode divisi belum diatur Admin');
   const year=Number(input.requestDate.slice(0,4)),month=Number(input.requestDate.slice(5,7));
   const romans=['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII'];
