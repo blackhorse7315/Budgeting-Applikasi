@@ -218,7 +218,9 @@ const saveRoster=async a=>{await window.twaCloud.saveMaster('roster',a);cloudRos
 const accountByRole=r=>Object.entries(accounts()).find(([u,a])=>a.role===r)?.[0]||'';
 const activeAccount=()=>accounts()[loginUsername];
 const applicantDepartment=()=>role==='pemohon'?String(activeAccount()?.department||'').trim():'';
-const allowedApplicants=()=>roster().pemohon.filter(p=>normDivision(p.department)===normDivision(applicantDepartment()));
+// Akun yang sudah dikaitkan hanya dapat mengajukan atas nama pemohon tersebut.
+// Akun lama yang belum memiliki personId tetap kompatibel sampai Admin mengaturnya.
+const allowedApplicants=()=>roster().pemohon.filter(p=>normDivision(p.department)===normDivision(applicantDepartment())&&(!activeAccount()?.personId||p.id===activeAccount().personId));
 const headDepartment=()=>role==='kepala'?String(activeAccount()?.department||'').trim():'';
 // Applicant and department heads see only their assigned division.
 // Finance and Director remain central approval roles for every division.
@@ -407,7 +409,7 @@ function calc(){
  if(el)el.innerHTML=Object.entries(groups).map(([c,n])=>`<div class="currency-stat-line">${money(n,c)}</div>`).join('')||'<div class="currency-stat-line">Rp 0</div>';
 }
 
-function bindForm(){const d=editing?load().find(x=>x.id===editing):null;if(!allowedApplicants().length){document.getElementById('requestForm').querySelector('button[type=submit]').disabled=true;document.getElementById('requestForm').insertAdjacentHTML('afterbegin','<div class="notice">Belum ada Nama Pemohon pada divisi akun ini. Admin perlu menambahkan Nama Pemohon dengan divisi yang sama.</div>')} (d?.items||[{name:'',qty:1,price:0,needed:'',currency:'IDR'}]).forEach(item=>addItem({...item,currency:itemCurrency(item,d),needed:itemNeeded(item,d)}));document.getElementById('requestForm').onsubmit=submitForm;const requesterSelect=document.getElementById('requesterPerson');if(requesterSelect){requesterSelect.addEventListener('change',syncRequesterDepartment);if(!d)syncRequesterDepartment();else headRoutingPreview()}syncRequestDate();calc()}
+function bindForm(){const d=editing?load().find(x=>x.id===editing):null;if(!allowedApplicants().length){document.getElementById('requestForm').querySelector('button[type=submit]').disabled=true;document.getElementById('requestForm').insertAdjacentHTML('afterbegin','<div class="notice">Nama Pemohon yang dikaitkan dengan akun ini belum ditemukan pada Master Data. Hubungi Admin untuk memperbaiki pemetaan akun.</div>')} (d?.items||[{name:'',qty:1,price:0,needed:'',currency:'IDR'}]).forEach(item=>addItem({...item,currency:itemCurrency(item,d),needed:itemNeeded(item,d)}));document.getElementById('requestForm').onsubmit=submitForm;const requesterSelect=document.getElementById('requesterPerson');if(requesterSelect){requesterSelect.addEventListener('change',syncRequesterDepartment);if(!d)syncRequesterDepartment();else headRoutingPreview()}syncRequestDate();calc()}
 function syncRequesterDepartment(){const person=roster().pemohon.find(p=>p.id===document.getElementById('requesterPerson')?.value),department=document.getElementById('requestDepartment');if(!department)return;const value=personDepartment(person);if(value&&!Array.from(department.options).some(o=>o.value===value)){department.add(new Option(value,value))}department.value=value;headRoutingPreview();}
 async function submitForm(e){e.preventDefault();if(role!=='pemohon'||!loginUsername){alert('Hanya pemohon yang dapat mengajukan dana.');return;}const f=e.target,fd=new FormData(f),items=[...document.querySelectorAll('.itemrow')].map(r=>({name:r.querySelector('.itname').value.trim(),qty:Number(r.querySelector('.itqty').value),price:Number(r.querySelector('.itprice').value),currency:r.querySelector('.itcurrency').value,needed:r.querySelector('.itneeded').value}));if(!items.length||items.some(x=>!x.name||x.qty<=0||x.price<0||!CURRENCIES[x.currency]||!x.needed)){alert('Masukkan setidaknya satu rincian biaya yang valid.');return}const requesterPerson=roster().pemohon.find(p=>p.id===document.getElementById('requesterPerson').value);if(!requesterPerson){alert('Pilih nama pemohon dari daftar yang disiapkan Admin.');return}
 const effectiveDepartment=personDepartment(requesterPerson);
@@ -535,31 +537,58 @@ async function addHeadAccount(e){e.preventDefault();if(role!=='admin')return fal
  const username=document.getElementById('newHeadUser').value.trim().toLowerCase(),department=document.getElementById('newHeadDivision').value.trim(),password=document.getElementById('newHeadPassword').value;
  try{await window.twaCloud.manageUser({action:'create',username,department,role:'kepala',password});alert('Akun dibuat.')}catch(err){alert('Gagal membuat atau mengubah akun: '+fundAccountError(err))}return false}
 async function deleteHeadAccount(username){if(role!=='admin'||!confirm('Hapus akun '+username+'?'))return;try{await window.twaCloud.manageUser({action:'delete',username});}catch(err){alert(err.message)}}
+// Opsi nama diambil langsung dari Admin → Master Data → Pemohon (Firebase fundMaster/roster).
+function applicantPersonOptions(selected='',editingUsername=''){
+ const applicants=roster().pemohon||[];
+ const used=new Map(Object.entries(accounts()).filter(([u,a])=>a.role==='pemohon'&&u!==editingUsername&&a.personId).map(([u,a])=>[a.personId,u]));
+ return `<option value="">— Pilih nama pemohon yang sudah tersimpan —</option>${applicants.map(p=>{
+  const taken=used.get(p.id),disabled=!!taken;
+  return `<option value="${escapeHtml(p.id)}" ${selected===p.id?'selected':''} ${disabled?'disabled':''}>${escapeHtml(p.name)} — ${escapeHtml(p.position)} (${escapeHtml(p.department||'Belum ada divisi')})${taken?' — digunakan: '+escapeHtml(taken):''}</option>`;
+ }).join('')}`;
+}
+function applicantAccountPersonChanged(selectId,departmentId){
+ const person=roster().pemohon.find(p=>p.id===document.getElementById(selectId)?.value);
+ const department=document.getElementById(departmentId);
+ if(department)department.value=person?.department||'';
+ const form=department?.closest('form');const job=form?.querySelector('input[aria-label="Jabatan pemohon"]');
+ if(job)job.value=person?.position||'Pilih Nama Pemohon';
+}
 function applicantAccountsAdmin(){
  const applicantUsers=Object.entries(accounts()).filter(([u,a])=>a.role==='pemohon');
- const divisions=[...new Set([...DEPARTMENTS.filter(d=>d!=='Lainnya'),...roster().pemohon.map(p=>p.department).filter(Boolean),...Object.keys(numberingSettings().codes)])];
- return `<section class="panel"><h2>Akun Pemohon per Divisi</h2><p class="muted">Buat akun berbeda untuk setiap divisi. Akun Pemohon hanya dapat melihat pengajuan divisinya sendiri dan hanya dapat mengubah pengajuan yang dibuat dengan akun tersebut.</p>
- <datalist id="applicantDivisionOptions">${divisions.map(d=>`<option value="${escapeHtml(d)}">`).join('')}</datalist>
- <div class="admin-grid">${applicantUsers.map(([username,a],i)=>`<form class="panel" style="margin:0" onsubmit="return saveApplicantAccount(event,'${escapeHtml(username)}',${i})">
- <h3>${escapeHtml(a.department||'Belum ditetapkan')}</h3>
- <div class="field"><label>Username *</label><input id="applicantUser_${i}" required pattern="[A-Za-z0-9._-]+" value="${escapeHtml(username)}"></div>
- <div class="field" style="margin-top:10px"><label>Divisi / Bagian *</label><input id="applicantDivision_${i}" required list="applicantDivisionOptions" value="${escapeHtml(a.department||'')}"></div>
+ const applicants=roster().pemohon||[];
+ return `<section class="panel"><h2>Akun Pemohon per Divisi</h2>
+ <p class="muted">Pilih <strong>Nama Pemohon</strong> dari Master Data untuk menentukan pemilik username dan password. Divisi dan jabatan mengikuti nama yang dipilih. Setiap nama hanya dapat dikaitkan dengan satu akun.</p>
+ ${!applicants.length?'<div class="notice">Belum ada Nama Pemohon. Buka Admin → Master Data → Pemohon dan simpan nama, jabatan, serta divisi terlebih dahulu.</div>':''}
+ <div class="admin-grid">${applicantUsers.map(([username,a],i)=>{
+ const person=applicants.find(p=>p.id===a.personId);
+ return `<form class="panel" style="margin:0" onsubmit="return saveApplicantAccount(event,'${escapeHtml(username)}',${i})">
+ <h3>${escapeHtml(person?.name||a.label||username)}</h3>
+ ${!person?'<div class="small" style="color:#a65313;margin-bottom:9px">Belum dikaitkan dengan Nama Pemohon. Pilih nama di bawah, lalu Simpan Akun.</div>':''}
+ <div class="field"><label>Nama Pemohon (pemilik akun) *</label><select id="applicantPerson_${i}" required onchange="applicantAccountPersonChanged('applicantPerson_${i}','applicantDivision_${i}')">${applicantPersonOptions(a.personId||'',username)}</select></div>
+ <div class="field" style="margin-top:10px"><label>Jabatan</label><input readonly value="${escapeHtml(person?.position||'Pilih Nama Pemohon')}" aria-label="Jabatan pemohon"></div>
+ <div class="field" style="margin-top:10px"><label>Username *</label><input id="applicantUser_${i}" required pattern="[A-Za-z0-9._-]+" value="${escapeHtml(username)}"></div>
+ <div class="field" style="margin-top:10px"><label>Divisi / Bagian (otomatis)</label><input id="applicantDivision_${i}" readonly value="${escapeHtml(person?.department||a.department||'')}"></div>
  <div class="field" style="margin-top:10px"><label>Password Baru (opsional)</label><input id="applicantPassword_${i}" type="password" minlength="6" autocomplete="new-password" placeholder="Kosongkan jika tidak diubah"></div>
  <button class="btn primary" style="margin-top:12px" type="submit">Simpan Akun</button>${username==='user'?'':`<button class="btn danger" style="margin-top:12px;margin-left:8px" type="button" onclick="deleteApplicantAccount('${escapeHtml(username)}')">Hapus Akun</button>`}
- </form>`).join('')}</div><div class="separator"></div>
+ </form>`}).join('')}</div><div class="separator"></div>
  <h3>Tambah Akun Pemohon Divisi</h3><form onsubmit="return addApplicantAccount(event)" class="grid2">
- <div class="field"><label>Username Baru *</label><input id="newApplicantUser" required pattern="[A-Za-z0-9._-]+" placeholder="Contoh: usermaint"></div>
- <div class="field"><label>Divisi / Bagian *</label><input id="newApplicantDivision" required list="applicantDivisionOptions" placeholder="Contoh: Maintenance"></div>
+ <div class="field"><label>Nama Pemohon *</label><select id="newApplicantPerson" required onchange="applicantAccountPersonChanged('newApplicantPerson','newApplicantDivision')">${applicantPersonOptions()}</select><small>Daftar diambil dari Admin → Master Data → Pemohon.</small></div>
+ <div class="field"><label>Divisi / Bagian (otomatis)</label><input id="newApplicantDivision" readonly placeholder="Otomatis sesuai nama pemohon"></div>
+ <div class="field"><label>Username Baru *</label><input id="newApplicantUser" required pattern="[A-Za-z0-9._-]+" placeholder="Contoh: opsstaff"></div>
  <div class="field"><label>Password *</label><input id="newApplicantPassword" required minlength="6" type="password" autocomplete="new-password"></div>
- <div class="field" style="align-self:end"><button class="btn primary" type="submit">+ Tambah Akun Pemohon</button></div>
+ <div class="field"><button class="btn primary" type="submit" ${!applicants.length?'disabled':''}>+ Tambah Akun Pemohon</button></div>
  </form></section>`;
 }
 async function saveApplicantAccount(e,old,i){e.preventDefault();if(role!=='admin')return false;
- const username=document.getElementById('applicantUser_'+i).value.trim().toLowerCase(),department=document.getElementById('applicantDivision_'+i).value.trim(),password=document.getElementById('applicantPassword_'+i).value;
- try{await window.twaCloud.manageUser({action:'update',oldUsername:old,username,department,role:'pemohon',password:password||undefined});alert('Akun Pemohon diperbarui.')}catch(err){alert('Gagal membuat atau mengubah akun: '+fundAccountError(err))}return false}
+ const username=document.getElementById('applicantUser_'+i).value.trim().toLowerCase(),personId=document.getElementById('applicantPerson_'+i).value,password=document.getElementById('applicantPassword_'+i).value;
+ const person=roster().pemohon.find(p=>p.id===personId);
+ if(!person?.department){alert('Pilih Nama Pemohon yang sudah memiliki Divisi / Bagian pada Master Data.');return false}
+ try{await window.twaCloud.manageUser({action:'update',oldUsername:old,username,department:person.department,personId,role:'pemohon',password:password||undefined});alert('Akun Pemohon berhasil dikaitkan dengan '+person.name+'.')}catch(err){alert('Gagal membuat atau mengubah akun: '+fundAccountError(err))}return false}
 async function addApplicantAccount(e){e.preventDefault();if(role!=='admin')return false;
- const username=document.getElementById('newApplicantUser').value.trim().toLowerCase(),department=document.getElementById('newApplicantDivision').value.trim(),password=document.getElementById('newApplicantPassword').value;
- try{await window.twaCloud.manageUser({action:'create',username,department,role:'pemohon',password});alert('Akun Pemohon dibuat.')}catch(err){alert('Gagal membuat atau mengubah akun: '+fundAccountError(err))}return false}
+ const username=document.getElementById('newApplicantUser').value.trim().toLowerCase(),personId=document.getElementById('newApplicantPerson').value,password=document.getElementById('newApplicantPassword').value;
+ const person=roster().pemohon.find(p=>p.id===personId);
+ if(!person?.department){alert('Pilih Nama Pemohon yang sudah memiliki Divisi / Bagian pada Master Data.');return false}
+ try{await window.twaCloud.manageUser({action:'create',username,department:person.department,personId,role:'pemohon',password});alert('Akun Pemohon '+person.name+' berhasil dibuat.')}catch(err){alert('Gagal membuat atau mengubah akun: '+fundAccountError(err))}return false}
 async function deleteApplicantAccount(username){if(role!=='admin'||!confirm('Hapus akun '+username+'?'))return;try{await window.twaCloud.manageUser({action:'delete',username});}catch(err){alert(err.message)}}
 function fundAccountError(err){
  const code=String(err?.code||'unknown').replace(/^functions\//,'');
