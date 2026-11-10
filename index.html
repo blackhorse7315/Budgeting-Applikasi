@@ -514,7 +514,11 @@ const firebaseConfig={
 };
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app),store=getStorage(app),functions=getFunctions(app,'asia-southeast2');
 const EMAIL_DOMAIN='fund.transwisata.invalid';
-const emailOf=username=>`${String(username||'').trim().toLowerCase()}@${EMAIL_DOMAIN}`;
+// Admin memakai akun Firebase Authentication yang sudah ada.
+const emailOf=username=>{
+ const name=String(username||'').trim().toLowerCase();
+ return name==='admin'?'admin@budget.com':`${name}@${EMAIL_DOMAIN}`;
+};
 const reqRef=id=>doc(db,'fundRequests',encodeURIComponent(id));
 let profile=null,unsubs=[],initialAuth=true;
 const requireUser=()=>{if(!auth.currentUser||!profile)throw Error('Sesi Firebase belum aktif');return auth.currentUser};
